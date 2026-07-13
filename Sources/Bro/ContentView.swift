@@ -102,9 +102,7 @@ struct ContentView: View {
         }
         .navigationTitle(folderURL?.lastPathComponent ?? "Bro")
         .overlay {
-            if let lightboxItem {
-                LightboxView(item: lightboxItem) { self.lightboxItem = nil }
-            }
+            LightboxView(item: lightboxItem) { self.lightboxItem = nil }
         }
         .onAppear { loadLastFolderIfAvailable() }
     }

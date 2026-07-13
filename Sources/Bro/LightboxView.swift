@@ -2,29 +2,31 @@ import SwiftUI
 import AVKit
 
 struct LightboxView: View {
-    let item: MediaItem
+    let item: MediaItem?
     let onClose: () -> Void
 
+    @State private var player: AVPlayer?
     @State private var image: NSImage?
+
+    private var isVisible: Bool { item != nil }
 
     var body: some View {
         ZStack {
-            Color.black.opacity(0.94)
+            Color.black.opacity(isVisible ? 0.94 : 0)
                 .ignoresSafeArea()
                 .onTapGesture { onClose() }
 
+            PlayerView(player: player)
+                .padding(48)
+                .opacity(item?.kind == .video ? 1 : 0)
+
             Group {
-                switch item.kind {
-                case .video:
-                    VideoPlayer(player: AVPlayer(url: item.url))
-                case .image:
-                    if let image {
-                        Image(nsImage: image)
-                            .resizable()
-                            .aspectRatio(contentMode: .fit)
-                    } else {
-                        ProgressView().tint(.white)
-                    }
+                if let image, item?.kind == .image {
+                    Image(nsImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                } else if item?.kind == .image {
+                    ProgressView().tint(.white)
                 }
             }
             .padding(48)
@@ -42,14 +44,30 @@ struct LightboxView: View {
                 }
                 Spacer()
             }
+            .opacity(isVisible ? 1 : 0)
         }
-        .onExitCommand { onClose() }
-        .task {
-            if item.kind == .image {
-                let url = item.url
-                image = await Task.detached { NSImage(contentsOf: url) }.value
+        .allowsHitTesting(isVisible)
+        .onExitCommand { if isVisible { onClose() } }
+        .onChange(of: item) { newItem in
+            player?.pause()
+            player = nil
+            image = nil
+
+            guard let newItem else { return }
+
+            switch newItem.kind {
+            case .video:
+                let newPlayer = AVPlayer(url: newItem.url)
+                player = newPlayer
+                newPlayer.play()
+            case .image:
+                let url = newItem.url
+                Task {
+                    let loaded = await Task.detached { NSImage(contentsOf: url) }.value
+                    guard item?.url == url else { return }
+                    image = loaded
+                }
             }
         }
-        .transition(.opacity)
     }
 }
