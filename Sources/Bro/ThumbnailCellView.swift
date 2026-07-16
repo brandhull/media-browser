@@ -3,11 +3,8 @@ import SwiftUI
 struct ThumbnailCellView: View {
     let item: MediaItem
     let isSelected: Bool
-    let size: CGFloat
 
     @StateObject private var loader = ThumbnailImageLoader()
-
-    private var cellHeight: CGFloat { size * 0.75 }
 
     var body: some View {
         VStack(spacing: 6) {
@@ -31,7 +28,7 @@ struct ThumbnailCellView: View {
                         HStack {
                             Spacer()
                             Image(systemName: "play.circle.fill")
-                                .font(.system(size: min(28, size * 0.13)))
+                                .font(.system(size: 22))
                                 .foregroundStyle(.white)
                                 .shadow(radius: 2)
                                 .padding(6)
@@ -39,7 +36,7 @@ struct ThumbnailCellView: View {
                     }
                 }
             }
-            .frame(width: size, height: cellHeight)
+            .aspectRatio(4.0 / 3.0, contentMode: .fit)
             .clipShape(RoundedRectangle(cornerRadius: 8))
             .overlay(
                 RoundedRectangle(cornerRadius: 8)
@@ -50,13 +47,12 @@ struct ThumbnailCellView: View {
                 .font(.caption)
                 .lineLimit(1)
                 .truncationMode(.middle)
-                .frame(width: size)
         }
         .padding(6)
         .background(isSelected ? Color.accentColor.opacity(0.15) : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: 10))
         .onAppear {
-            loader.load(url: item.url, size: CGSize(width: size * 2, height: cellHeight * 2))
+            loader.load(url: item.url, size: CGSize(width: 640, height: 480))
         }
     }
 }

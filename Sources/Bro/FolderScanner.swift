@@ -33,7 +33,7 @@ enum FolderScanner {
             let kind: MediaKind
             if type.conforms(to: .image) {
                 kind = .image
-            } else if type.conforms(to: .movie) || type.conforms(to: .video) || type.conforms(to: .audiovisualContent) {
+            } else if type.conforms(to: .movie) || type.conforms(to: .video) {
                 kind = .video
             } else {
                 continue

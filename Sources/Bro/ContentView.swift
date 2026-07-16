@@ -10,9 +10,9 @@ struct ContentView: View {
     @State private var sortAscending = true
     @State private var lightboxItem: MediaItem?
     @State private var isScanning = false
-    @State private var thumbnailSize: CGFloat = 160
+    @State private var columnCount: Int = 4
 
-    private static let lastFolderKey = "lastFolderPath"
+    private static let lastFolderStackKey = "lastFolderStack"
 
     private var folderURL: URL? { folderStack.last }
 
@@ -48,7 +48,7 @@ struct ContentView: View {
                             items: sortedItems,
                             subfolders: subfolders,
                             selectedID: $selectedID,
-                            thumbnailSize: thumbnailSize,
+                            columnCount: columnCount,
                             onOpen: { item in lightboxItem = item },
                             onNavigate: { url in navigateInto(url) }
                         )
@@ -57,8 +57,8 @@ struct ContentView: View {
                 }
                 .frame(minWidth: 500, maxWidth: .infinity, maxHeight: .infinity)
 
-                if let selectedItem {
-                    DetailPaneView(item: selectedItem)
+                if folderURL != nil {
+                    DetailPaneView(item: selectedItem, onRename: renameItem)
                 }
             }
         }
@@ -86,17 +86,14 @@ struct ContentView: View {
                     }
                     .help(sortAscending ? "Ascending" : "Descending")
 
-                    HStack(spacing: 6) {
-                        Image(systemName: "photo")
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
-                        Slider(value: $thumbnailSize, in: 100...360)
-                            .frame(width: 100)
-                        Image(systemName: "photo")
-                            .font(.system(size: 16))
-                            .foregroundStyle(.secondary)
+                    Picker("Columns", selection: $columnCount) {
+                        ForEach(2...5, id: \.self) { count in
+                            Text("\(count)").tag(count)
+                        }
                     }
-                    .help("Thumbnail size")
+                    .pickerStyle(.segmented)
+                    .frame(width: 140)
+                    .help("Number of columns")
                 }
             }
         }
@@ -169,10 +166,16 @@ struct ContentView: View {
 
     private func loadLastFolderIfAvailable() {
         guard folderStack.isEmpty else { return }
-        guard let path = UserDefaults.standard.string(forKey: Self.lastFolderKey) else { return }
-        var isDirectory: ObjCBool = false
-        guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { return }
-        folderStack = [URL(fileURLWithPath: path)]
+        guard let paths = UserDefaults.standard.stringArray(forKey: Self.lastFolderStackKey), !paths.isEmpty else { return }
+
+        var restoredStack: [URL] = []
+        for path in paths {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: path, isDirectory: &isDirectory), isDirectory.boolValue else { break }
+            restoredStack.append(URL(fileURLWithPath: path))
+        }
+        guard !restoredStack.isEmpty else { return }
+        folderStack = restoredStack
         loadCurrentFolder()
     }
 
@@ -180,7 +183,7 @@ struct ContentView: View {
         guard let url = folderURL else { return }
         selectedID = nil
         isScanning = true
-        UserDefaults.standard.set(url.path, forKey: Self.lastFolderKey)
+        UserDefaults.standard.set(folderStack.map { $0.path }, forKey: Self.lastFolderStackKey)
         Task.detached {
             let scanned = FolderScanner.scan(folder: url)
             await MainActor.run {
@@ -189,5 +192,36 @@ struct ContentView: View {
                 self.isScanning = false
             }
         }
+    }
+
+    private func renameItem(_ item: MediaItem, to newName: String) throws {
+        let oldURL = item.url
+        let newURL = oldURL.deletingLastPathComponent().appendingPathComponent(newName)
+        guard newURL != oldURL else { return }
+        guard !FileManager.default.fileExists(atPath: newURL.path) else {
+            throw RenameError.nameTaken
+        }
+        try FileManager.default.moveItem(at: oldURL, to: newURL)
+
+        guard let index = items.firstIndex(where: { $0.url == oldURL }) else { return }
+        let old = items[index]
+        items[index] = MediaItem(
+            url: newURL,
+            kind: old.kind,
+            name: newURL.lastPathComponent,
+            size: old.size,
+            createdDate: old.createdDate,
+            modifiedDate: old.modifiedDate,
+            lastOpenedDate: old.lastOpenedDate
+        )
+        selectedID = newURL
+    }
+}
+
+enum RenameError: LocalizedError {
+    case nameTaken
+
+    var errorDescription: String? {
+        "A file with that name already exists."
     }
 }
